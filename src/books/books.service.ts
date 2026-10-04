@@ -1,68 +1,40 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Book } from './book.entity';
 import { CreateBookDto } from './dto/create-book.dto';
-import { UpdateBookDto} from './dto/update-book.dto';
+import { UpdateBookDto } from './dto/update-book.dto';
+
 @Injectable()
 export class BooksService {
-  private books = [
-    {
-      id: 1,
-      title: '1984',
-      author: 'George Orwell',
-      price: 500,
-    },
-    {
-      id: 2,
-      title: 'Мастер и Маргарита',
-      author: 'Михаил Булгаков',
-      price: 700,
-    },
-  ];
+  constructor(
+    @InjectRepository(Book)
+    private readonly booksRepository: Repository<Book>,
+  ) {}
 
-  getBooks() {
-    return this.books;
+  async findAll() {
+    return this.booksRepository.find();
   }
 
-  createBook(createBookDto: CreateBookDto) {
-    const newBook = {
-      id: this.books.length + 1,
-      ...createBookDto,
-    };
-
-    this.books.push(newBook);
-
-    return newBook;
+  async findOne(id: number) {
+    return this.booksRepository.findOneBy({ id });
   }
 
-  getBookById(id: number) {
-    console.log('ID:', id);
-    console.log('BOOKS:', this.books);
+  async create(createBookDto: CreateBookDto) {
+    const book = this.booksRepository.create(createBookDto);
 
-    const book = this.books.find((book) => book.id === id);
-
-    console.log('FOUND:', book);
-
-    return book;
+    return this.booksRepository.save(book);
   }
 
+  async update(id: number, updateBookDto: UpdateBookDto) {
+    await this.booksRepository.update(id, updateBookDto);
 
-  updateBook(id:number,updateBookDto:UpdateBookDto){
-    const book = this.books.find((book)=>book.id === id);
-
-    if(!book){
-      return null;
-    }
-    Object.assign(book,updateBookDto);
-
-    return book;
+    return this.findOne(id);
   }
 
-  deleteBook(id:number){
-    const bookIndex = this.books.findIndex((book)=>book.id===id);
-    if (bookIndex === -1){
-      return null;
-    }
-    const deletedBook = this.books.splice(bookIndex,1);
+  async remove(id: number) {
+    await this.booksRepository.delete(id);
 
-    return deletedBook;
+    return { message: 'Book deleted' };
   }
 }
