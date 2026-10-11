@@ -1,6 +1,6 @@
-PATCH http://localhost:3000/books/3
+PATCH http://localhost:3000/books/5
 Content-Type: application/json
 
 {
-  "price": 2200
+  "price": 700
 }
