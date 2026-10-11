@@ -1,5 +1,6 @@
-GET http://localhost:3000/books/999999
+PATCH http://localhost:3000/books/3
+Content-Type: application/json
 
-
-###
-GET http://localhost:3000/books/999999
+{
+  "price": 2200
+}

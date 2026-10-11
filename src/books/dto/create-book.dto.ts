@@ -1,14 +1,20 @@
-import{IsNumber,IsString,Min,IsNotEmpty} from 'class-validator';
-export class CreateBookDto{
+import {
+  IsNumber,
+  IsString,
+  Min,
+  IsNotEmpty,
+  MaxLength,
+} from 'class-validator';
+export class CreateBookDto {
   @IsString()
-  @IsNotEmpty()
-  title:string;
+  @MaxLength(255)
+  title: string;
 
   @IsString()
-  @IsNotEmpty()
-  author:string;
+  @MaxLength(255)
+  author: string;
 
   @IsNumber()
   @Min(0)
-  price:number;
+  price: number;
 }
