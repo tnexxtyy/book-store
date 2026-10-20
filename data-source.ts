@@ -1,7 +1,10 @@
-import * as dotenv from 'dotenv';
-dotenv.config();
+import 'dotenv/config';
 import { DataSource } from 'typeorm';
-import { Book } from './src/books/book.entity';
+
+import { Author } from './src/authors/entities/author.entity';
+import { Book } from './src/authors/entities/book.entity';
+import { User } from './src/users/entities/user.entity';
+import { Order } from './src/orders/entities/order.entity';
 
 export default new DataSource({
   type: 'postgres',
@@ -10,7 +13,9 @@ export default new DataSource({
   username: process.env.DB_USERNAME ?? 'postgres',
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME ?? 'book_store',
-  entities: [Book],
+
+  entities: [Author, Book, User, Order],
   migrations: ['src/migrations/*.ts'],
+
   synchronize: false,
 });

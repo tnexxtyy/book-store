@@ -1,20 +1,32 @@
-import {
-  IsNumber,
-  IsString,
-  Min,
-  IsNotEmpty,
-  MaxLength,
-} from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsInt, IsNotEmpty, IsNumber, IsString, Min } from 'class-validator';
+
 export class CreateBookDto {
   @IsString()
-  @MaxLength(255)
+  @IsNotEmpty()
   title: string;
 
   @IsString()
-  @MaxLength(255)
-  author: string;
+  @IsNotEmpty()
+  description: string;
 
+  @Type(() => Number)
   @IsNumber()
   @Min(0)
   price: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  publishedYear: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  stock: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  authorId: number;
 }

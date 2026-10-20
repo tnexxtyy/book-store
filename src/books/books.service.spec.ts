@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { BooksService } from './books.service';
-import { Book } from './book.entity';
+import { Book } from '../authors/entities/book.entity';
 
 describe('BooksService', () => {
   let service: BooksService;
