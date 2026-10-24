@@ -8,12 +8,14 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { Order } from './entities/order.entity';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 
 @Controller('orders')
 export class OrdersController {
@@ -25,8 +27,8 @@ export class OrdersController {
   }
 
   @Get()
-  findAll(): Promise<Order[]> {
-    return this.ordersService.findAll();
+  findAll(@Query() query: PaginationQueryDto): Promise<Order[]> {
+    return this.ordersService.findAll(query.page, query.limit);
   }
 
   @Get(':id')

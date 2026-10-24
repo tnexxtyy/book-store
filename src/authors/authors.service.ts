@@ -15,10 +15,12 @@ export class AuthorsService {
     @InjectRepository(Author)
     private readonly authorsRepository: Repository<Author>,
   ) {}
-  async findAll(): Promise<Author[]> {
+  async findAll(page = 1, limit = 20): Promise<Author[]> {
     return this.authorsRepository.find({
       relations: { books: true },
       order: { id: 'ASC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
   }
   async findOne(id: number): Promise<Author> {

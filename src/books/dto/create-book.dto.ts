@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsNotEmpty, IsNumber, IsString, Min } from 'class-validator';
+import { IsInt, IsNotEmpty, IsString, Min } from 'class-validator';
 
 export class CreateBookDto {
   @IsString()
@@ -10,8 +10,9 @@ export class CreateBookDto {
   @IsNotEmpty()
   description: string;
 
+  // Цена в рублях, целым числом: колонка integer, дробь Postgres не примет.
   @Type(() => Number)
-  @IsNumber()
+  @IsInt()
   @Min(0)
   price: number;
 

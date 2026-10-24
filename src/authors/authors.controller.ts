@@ -8,11 +8,13 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { AuthorsService } from './authors.service';
 import { Author } from './entities/author.entity';
 import { CreateAuthorDto } from './dto/create-author.dto';
 import { UpdateAuthorDto } from './dto/update-author.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 @Controller('authors')
 export class AuthorsController {
   constructor(private readonly authorsService: AuthorsService) {}
@@ -21,8 +23,8 @@ export class AuthorsController {
     return this.authorsService.create(dto);
   }
   @Get()
-  findAll(): Promise<Author[]> {
-    return this.authorsService.findAll();
+  findAll(@Query() query: PaginationQueryDto): Promise<Author[]> {
+    return this.authorsService.findAll(query.page, query.limit);
   }
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number): Promise<Author> {

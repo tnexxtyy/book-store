@@ -13,33 +13,14 @@ import {
 import { BooksService } from './books.service';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
-import { Book } from '../authors/entities/book.entity';
+import { FindBooksQueryDto } from './dto/find-books-query.dto';
+import { Book } from './entities/book.entity';
 @Controller('books')
 export class BooksController {
   constructor(private readonly booksService: BooksService) {}
   @Get()
-  getBooks(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('search') search?: string,
-    @Query('authorId') authorId?: string,
-    @Query('sortBy') sortBy?: string,
-    @Query('order') order?: 'ASC' | 'DESC',
-  ) {
-    return this.booksService.findAll({
-      page: page === undefined ? undefined : Number(page),
-      limit: limit === undefined ? undefined : Number(limit),
-      search,
-      authorId: authorId === undefined ? undefined : Number(authorId),
-      sortBy,
-      order,
-    });
-  }
-  @Get('author/:authorId')
-  getBooksByAuthor(
-    @Param('authorId', ParseIntPipe) authorId: number,
-  ): Promise<Book[]> {
-    return this.booksService.findByAuthor(authorId);
+  getBooks(@Query() query: FindBooksQueryDto) {
+    return this.booksService.findAll(query);
   }
   @Get(':id')
   getBookById(@Param('id', ParseIntPipe) id: number): Promise<Book> {

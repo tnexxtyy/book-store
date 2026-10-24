@@ -1,5 +1,26 @@
 import { Type } from 'class-transformer';
-import { ArrayNotEmpty, IsArray, IsInt, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayNotEmpty,
+  IsArray,
+  IsInt,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+
+export class OrderItemDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  bookId: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  quantity: number;
+}
 
 export class CreateOrderDto {
   @Type(() => Number)
@@ -9,8 +30,8 @@ export class CreateOrderDto {
 
   @IsArray()
   @ArrayNotEmpty()
-  @Type(() => Number)
-  @IsInt({ each: true })
-  @Min(1, { each: true })
-  bookIds: number[];
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => OrderItemDto)
+  items: OrderItemDto[];
 }

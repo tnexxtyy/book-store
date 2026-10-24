@@ -1,16 +1,25 @@
 import {
-  Injectable,
-  NotFoundException,
   BadRequestException,
   ConflictException,
+  Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { Order, OrderStatus } from './entities/order.entity';
+import { OrderItem } from './entities/order-item.entity';
 import { User } from '../users/entities/user.entity';
-import { Book } from '../authors/entities/book.entity';
+import { Book } from '../books/entities/book.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
+
+// Из какого статуса в какой можно перейти. cancelled — конечный: остатки уже
+// вернулись на склад, и второй раз списать их нельзя.
+const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  [OrderStatus.NEW]: [OrderStatus.PAID, OrderStatus.CANCELLED],
+  [OrderStatus.PAID]: [OrderStatus.CANCELLED],
+  [OrderStatus.CANCELLED]: [],
+};
 
 @Injectable()
 export class OrdersService {
@@ -21,16 +30,14 @@ export class OrdersService {
   ) {}
 
   async create(dto: CreateOrderDto): Promise<Order> {
-    if (new Set(dto.bookIds).size !== dto.bookIds.length) {
+    const bookIds = dto.items.map((item) => item.bookId);
+
+    if (new Set(bookIds).size !== bookIds.length) {
       throw new BadRequestException('Duplicate book IDs are not allowed');
     }
 
     return this.dataSource.transaction(async (manager) => {
-      const userRepository = manager.getRepository(User);
-      const bookRepository = manager.getRepository(Book);
-      const orderRepository = manager.getRepository(Order);
-
-      const user = await userRepository.findOneBy({
+      const user = await manager.getRepository(User).findOneBy({
         id: dto.userId,
       });
 
@@ -38,56 +45,72 @@ export class OrdersService {
         throw new NotFoundException('User not found');
       }
 
-      const books: Book[] = [];
-      const sortedBookIds = [...dto.bookIds].sort((a, b) => a - b);
+      const books = await this.lockBooks(manager, bookIds);
 
-      for (const bookId of sortedBookIds) {
-        const book = await bookRepository
-          .createQueryBuilder('book')
-          .where('book.id = :bookId', { bookId })
-          .setLock('pessimistic_write')
-          .getOne();
-
-        if (!book) {
-          throw new NotFoundException(`Book ${bookId} not found`);
-        }
-
-        if (book.stock < 1) {
-          throw new ConflictException(`Book "${book.title}" is out of stock`);
-        }
-
-        book.stock -= 1;
-        await bookRepository.save(book);
-        books.push(book);
+      const missing = bookIds.filter(
+        (id) => !books.some((book) => book.id === id),
+      );
+      if (missing.length > 0) {
+        throw new NotFoundException(`Books not found: ${missing.join(', ')}`);
       }
 
-      const totalPrice = books.reduce(
-        (total, book) => total + Number(book.price),
+      const outOfStock = dto.items.filter((item) => {
+        const book = books.find((b) => b.id === item.bookId)!;
+        return book.stock < item.quantity;
+      });
+      if (outOfStock.length > 0) {
+        const titles = outOfStock
+          .map((item) => {
+            const book = books.find((b) => b.id === item.bookId)!;
+            return `"${book.title}"`;
+          })
+          .join(', ');
+        throw new ConflictException(`Out of stock: ${titles}`);
+      }
+
+      const items = dto.items.map((line) => {
+        const book = books.find((b) => b.id === line.bookId)!;
+        book.stock -= line.quantity;
+
+        return manager.getRepository(OrderItem).create({
+          book,
+          quantity: line.quantity,
+          unitPrice: book.price,
+        });
+      });
+
+      await manager.getRepository(Book).save(books);
+
+      const totalPrice = items.reduce(
+        (total, item) => total + item.unitPrice * item.quantity,
         0,
       );
 
-      const order = orderRepository.create({
-        user,
-        books,
-        totalPrice,
-        status: OrderStatus.NEW,
-      });
-
-      return orderRepository.save(order);
+      const orderRepository = manager.getRepository(Order);
+      return orderRepository.save(
+        orderRepository.create({
+          user,
+          items,
+          totalPrice,
+          status: OrderStatus.NEW,
+        }),
+      );
     });
   }
 
-  async findAll(): Promise<Order[]> {
+  async findAll(page = 1, limit = 20): Promise<Order[]> {
     return this.ordersRepository.find({
-      relations: { user: true, books: true },
+      relations: { user: true, items: { book: true } },
       order: { id: 'ASC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
   }
 
   async findOne(id: number): Promise<Order> {
     const order = await this.ordersRepository.findOne({
       where: { id },
-      relations: { user: true, books: true },
+      relations: { user: true, items: { book: true } },
     });
 
     if (!order) {
@@ -100,8 +123,8 @@ export class OrdersService {
   async update(id: number, dto: UpdateOrderDto): Promise<Order> {
     return this.dataSource.transaction(async (manager) => {
       const orderRepository = manager.getRepository(Order);
-      const bookRepository = manager.getRepository(Book);
 
+      // Блокируем только строку заказа: FOR UPDATE нельзя повесить на nullable-сторону LEFT JOIN.
       const order = await orderRepository
         .createQueryBuilder('order')
         .where('order.id = :id', { id })
@@ -112,53 +135,24 @@ export class OrdersService {
         throw new NotFoundException('Order not found');
       }
 
-      const allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
-        [OrderStatus.NEW]: [OrderStatus.PAID, OrderStatus.CANCELLED],
-        [OrderStatus.PAID]: [OrderStatus.CANCELLED],
-        [OrderStatus.CANCELLED]: [],
-      };
-
-      if (
-        dto.status !== order.status &&
-        !allowedTransitions[order.status]?.includes(dto.status)
-      ) {
-        throw new BadRequestException(
-          `Cannot change order status from ${order.status} to ${dto.status}`,
-        );
-      }
-
-      const books = await orderRepository
-        .createQueryBuilder('order')
-        .relation(Order, 'books')
-        .of(order)
-        .loadMany<Book>();
-
-      if (
-        dto.status === OrderStatus.CANCELLED &&
-        order.status !== OrderStatus.CANCELLED
-      ) {
-        const sortedBooks = [...books].sort((a, b) => a.id - b.id);
-
-        for (const item of sortedBooks) {
-          const book = await bookRepository
-            .createQueryBuilder('book')
-            .where('book.id = :id', { id: item.id })
-            .setLock('pessimistic_write')
-            .getOne();
-
-          if (book) {
-            book.stock += 1;
-            await bookRepository.save(book);
-          }
+      if (dto.status !== order.status) {
+        if (!ALLOWED_TRANSITIONS[order.status].includes(dto.status)) {
+          throw new BadRequestException(
+            `Cannot change order status from ${order.status} to ${dto.status}`,
+          );
         }
-      }
 
-      order.status = dto.status;
-      await orderRepository.save(order);
+        if (dto.status === OrderStatus.CANCELLED) {
+          await this.returnStock(manager, id);
+        }
+
+        order.status = dto.status;
+        await orderRepository.save(order);
+      }
 
       return orderRepository.findOneOrFail({
         where: { id },
-        relations: { user: true, books: true },
+        relations: { user: true, items: { book: true } },
       });
     });
   }
@@ -184,8 +178,46 @@ export class OrdersService {
 
     return this.ordersRepository.find({
       where: { user: { id: userId } },
-      relations: { user: true, books: true },
+      relations: { user: true, items: { book: true } },
       order: { id: 'DESC' },
+    });
+  }
+
+  // Возвращает остатки по позициям заказа; вызывается внутри транзакции.
+  private async returnStock(manager: EntityManager, orderId: number) {
+    const items = await manager.getRepository(OrderItem).find({
+      where: { order: { id: orderId } },
+      relations: { book: true },
+    });
+
+    const books = await this.lockBooks(
+      manager,
+      items.map((item) => item.book.id),
+    );
+
+    for (const book of books) {
+      const item = items.find((i) => i.book.id === book.id)!;
+      book.stock += item.quantity;
+    }
+
+    await manager.getRepository(Book).save(books);
+  }
+
+  // Все книги одним запросом и всегда по возрастанию id: если два заказа берут
+  // блокировки в разном порядке, каждый ждёт строку другого, и Postgres
+  // обрывает одну транзакцию с deadlock.
+  private async lockBooks(
+    manager: EntityManager,
+    bookIds: number[],
+  ): Promise<Book[]> {
+    if (bookIds.length === 0) {
+      return [];
+    }
+
+    return manager.getRepository(Book).find({
+      where: { id: In(bookIds) },
+      order: { id: 'ASC' },
+      lock: { mode: 'pessimistic_write' },
     });
   }
 }
