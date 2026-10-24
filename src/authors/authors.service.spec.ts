@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import {
   BadRequestException,
   ConflictException,
@@ -12,11 +13,11 @@ describe('AuthorsService', () => {
   let service: AuthorsService;
 
   const authorsRepository = {
-    find: jest.fn(),
-    findOne: jest.fn(),
-    create: jest.fn(),
-    save: jest.fn(),
-    remove: jest.fn(),
+    find: jest.fn<(...args: any[]) => Promise<any>>(),
+    findOne: jest.fn<(...args: any[]) => Promise<any>>(),
+    create: jest.fn<(...args: any[]) => any>(),
+    save: jest.fn<(...args: any[]) => Promise<any>>(),
+    remove: jest.fn<(...args: any[]) => Promise<any>>(),
   };
 
   beforeEach(async () => {

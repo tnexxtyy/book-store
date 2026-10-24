@@ -25,7 +25,7 @@ REST API для книжного магазина, разработанный н
 ## Установка
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
+git clone https://github.com/tnexxtyy/book-store.git
 cd book-store
 npm install
 ```
@@ -47,8 +47,14 @@ DB_NAME=book_store
 ## База данных
 
 1. Создай базу данных PostgreSQL с именем `book_store`.
-2. Проверь настройки подключения в `src/data-source.ts` и `src/app.module.ts`.
-3. Выполни доступные миграции проекта согласно настройкам TypeORM.
+2. Проверь настройки подключения в `data-source.ts` (для миграций) и `src/app.module.ts` (для приложения).
+3. Выполни миграции:
+
+```bash
+npm run migration:run
+```
+
+Новую миграцию создавай командой, а не руками, например: `npm run migration:generate -- src/migrations/AddBookDetails`.
 
 ## Запуск
 
@@ -80,14 +86,20 @@ npm run start:prod
 | GET | `/books/:id` | Книга по ID |
 | POST | `/books` | Создать книгу |
 | PATCH | `/books/:id` | Обновить книгу |
-| DELETE | `/books/:id` | Удалить книгу |
-| GET | `/books/author/:authorId` | Книги автора |
-| GET | `/authors` | Список авторов |
+| DELETE | `/books/:id` | Удалить книгу (409, если она есть в заказах) |
+| GET | `/authors` | Список авторов (пагинация) |
 | POST | `/authors` | Создать автора |
-| GET | `/users` | Список пользователей |
+| GET | `/authors/:id` | Автор с книгами |
+| PATCH | `/authors/:id` | Обновить автора |
+| DELETE | `/authors/:id` | Удалить автора без книг |
+| GET | `/users` | Список пользователей (пагинация) |
 | POST | `/users` | Создать пользователя |
+| GET | `/users/:id` | Пользователь с заказами |
+| PATCH | `/users/:id` | Обновить пользователя |
+| DELETE | `/users/:id` | Удалить пользователя без заказов |
 | GET | `/users/:id/orders` | Заказы пользователя |
-| GET | `/orders` | Список заказов |
+| GET | `/orders` | Список заказов (пагинация) |
+| GET | `/orders/:id` | Заказ с позициями |
 | POST | `/orders` | Создать заказ |
 | PATCH | `/orders/:id` | Изменить статус заказа |
 | DELETE | `/orders/:id` | Удалить отменённый заказ |
@@ -117,12 +129,12 @@ npm run start:prod
 }
 ```
 
-Создание заказа:
+Создание заказа (позиции с количеством, до 20 позиций, количество от 1 до 10):
 
 ```json
 {
   "userId": 1,
-  "bookIds": [1]
+  "items": [{ "bookId": 1, "quantity": 2 }]
 }
 ```
 
@@ -136,9 +148,31 @@ npm run start:prod
 
 Все примеры предполагают, что соответствующие записи уже существуют в базе данных.
 
+## Параметры `GET /books`
+
+- `page` — номер страницы, от 1 (по умолчанию 1)
+- `limit` — книг на странице, от 1 до 100 (по умолчанию 20)
+- `search` — поиск по названию без учёта регистра; символы `%` и `_` ищутся как обычные
+- `authorId` — книги конкретного автора
+- `sortBy` — одно из: `id`, `title`, `price`, `publishedYear`, `stock`, `createdAt`
+- `order` — `ASC` или `DESC`
+
+Неверный параметр даёт 400. Ответ списка имеет вид `{ data, total, page, limit, totalPages }`.
+
+## Тесты
+
+```bash
+npm test                     # unit-тесты сервисов
+createdb book_store_test
+DB_NAME=book_store_test npm run migration:run
+DB_NAME=book_store_test npm run test:e2e -- --runInBand
+```
+
+Тесты заказов идут на настоящем Postgres: блокировки и транзакции моками не проверить. `--runInBand` нужен, чтобы тесты не чистили одну базу параллельно.
+
 ## Проверка
 
-Для тестирования API используй Postman. Перед проверкой заказов убедись, что пользователь и книги существуют, а остаток книг достаточен.
+Для ручной проверки API используй `requests.http` или Postman. Перед проверкой заказов убедись, что пользователь и книги существуют, а остаток книг достаточен.
 
 ## Статус проекта
 

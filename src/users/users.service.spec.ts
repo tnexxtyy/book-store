@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException, NotFoundException } from '@nestjs/common';
@@ -49,14 +50,14 @@ describe('UsersService', () => {
       age: 20,
     };
 
-    repository.findOne.mockResolvedValue(null);
+    repository.findOneBy.mockResolvedValue(null);
     repository.create.mockReturnValue(user);
     repository.save.mockResolvedValue(user);
 
     await expect(service.create(dto)).resolves.toEqual(user);
 
-    expect(repository.findOne).toHaveBeenCalledWith({
-      where: { email: 'test@mail.com' },
+    expect(repository.findOneBy).toHaveBeenCalledWith({
+      email: 'test@mail.com',
     });
 
     expect(repository.create).toHaveBeenCalledWith({
@@ -66,7 +67,7 @@ describe('UsersService', () => {
   });
 
   it('запрещает создание пользователя с существующим email', async () => {
-    repository.findOne.mockResolvedValue({
+    repository.findOneBy.mockResolvedValue({
       id: 1,
       email: 'test@mail.com',
     });

@@ -1,6 +1,124 @@
-PATCH http://localhost:3000/books/5
+@base = http://localhost:3000
+
+### Список книг с параметрами
+GET {{base}}/books?page=1&limit=10&search=orwell&sortBy=price&order=DESC
+
+### Книга по id
+GET {{base}}/books/1
+
+### Создать книгу
+POST {{base}}/books
+Content-Type: application/json
+
+{
+  "title": "1984",
+  "description": "A dystopian novel",
+  "price": 500,
+  "publishedYear": 1949,
+  "stock": 10,
+  "authorId": 1
+}
+
+### Обновить книгу
+PATCH {{base}}/books/1
 Content-Type: application/json
 
 {
   "price": 700
 }
+
+### Удалить книгу
+DELETE {{base}}/books/1
+
+### Список авторов
+GET {{base}}/authors?page=1&limit=20
+
+### Создать автора
+POST {{base}}/authors
+Content-Type: application/json
+
+{
+  "name": "George Orwell",
+  "country": "UK",
+  "birthYear": 1903
+}
+
+### Автор по id
+GET {{base}}/authors/1
+
+### Обновить автора
+PATCH {{base}}/authors/1
+Content-Type: application/json
+
+{
+  "country": "United Kingdom"
+}
+
+### Удалить автора
+DELETE {{base}}/authors/1
+
+### Список пользователей
+GET {{base}}/users
+
+### Создать пользователя
+POST {{base}}/users
+Content-Type: application/json
+
+{
+  "name": "Ivan",
+  "email": "ivan@example.com",
+  "age": 20
+}
+
+### Пользователь по id
+GET {{base}}/users/1
+
+### Обновить пользователя
+PATCH {{base}}/users/1
+Content-Type: application/json
+
+{
+  "age": 21
+}
+
+### Заказы пользователя
+GET {{base}}/users/1/orders
+
+### Удалить пользователя
+DELETE {{base}}/users/1
+
+### Список заказов
+GET {{base}}/orders?page=1&limit=20
+
+### Заказ по id
+GET {{base}}/orders/1
+
+### Создать заказ
+POST {{base}}/orders
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "items": [
+    { "bookId": 1, "quantity": 2 }
+  ]
+}
+
+### Перевести заказ в оплаченный
+PATCH {{base}}/orders/1
+Content-Type: application/json
+
+{
+  "status": "paid"
+}
+
+### Отменить заказ
+PATCH {{base}}/orders/1
+Content-Type: application/json
+
+{
+  "status": "cancelled"
+}
+
+### Удалить отменённый заказ
+DELETE {{base}}/orders/1

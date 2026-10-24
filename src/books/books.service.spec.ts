@@ -1,9 +1,10 @@
+import { jest } from '@jest/globals';
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { BooksService } from './books.service';
-import { Book } from '../authors/entities/book.entity';
+import { Book } from './entities/book.entity';
 import { Author } from '../authors/entities/author.entity';
 
 describe('BooksService', () => {
@@ -36,6 +37,7 @@ describe('BooksService', () => {
       create: jest.fn(),
       save: jest.fn(),
       remove: jest.fn(),
+      delete: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
     };
 
@@ -71,9 +73,7 @@ describe('BooksService', () => {
   it('возвращает список книг', async () => {
     queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
 
-    await expect(
-      service.findAll({ page: 1, limit: 10 }),
-    ).resolves.toEqual({
+    await expect(service.findAll({ page: 1, limit: 10 })).resolves.toEqual({
       data: [],
       total: 0,
       page: 1,
@@ -115,9 +115,7 @@ describe('BooksService', () => {
     repository.create.mockReturnValue(book);
     repository.save.mockResolvedValue(book);
 
-    await expect(
-      service.create(bookData as any),
-    ).resolves.toEqual(book);
+    await expect(service.create(bookData as any)).resolves.toEqual(book);
 
     expect(authorRepository.findOneBy).toHaveBeenCalledWith({
       id: 1,
@@ -143,18 +141,16 @@ describe('BooksService', () => {
     const book = { id: 1, title: 'Test Book' };
 
     repository.findOne.mockResolvedValue(book);
-    repository.remove.mockResolvedValue(book);
+    repository.delete.mockResolvedValue({ affected: 1 });
 
     await expect(service.remove(1)).resolves.toBeUndefined();
 
-    expect(repository.remove).toHaveBeenCalledWith(book);
+    expect(repository.delete).toHaveBeenCalledWith(1);
   });
 
   it('выбрасывает 404 при удалении отсутствующей книги', async () => {
     repository.findOne.mockResolvedValue(null);
 
-    await expect(service.remove(999)).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(service.remove(999)).rejects.toThrow(NotFoundException);
   });
 });
