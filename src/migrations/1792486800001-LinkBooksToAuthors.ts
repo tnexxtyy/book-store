@@ -16,9 +16,8 @@ export class LinkBooksToAuthors1792486800001 implements MigrationInterface {
 
     await queryRunner.query(`
       INSERT INTO "authors" ("name")
-      SELECT DISTINCT "author"
+      SELECT DISTINCT COALESCE(NULLIF(TRIM("author"), ''), 'Unknown')
       FROM "books"
-      WHERE "author" IS NOT NULL AND "author" <> ''
     `);
 
     // Добавляем поле для внешнего ключа.
@@ -31,7 +30,7 @@ export class LinkBooksToAuthors1792486800001 implements MigrationInterface {
       UPDATE "books" AS b
       SET "author_id" = a."id"
       FROM "authors" AS a
-      WHERE a."name" = b."author"
+      WHERE a."name" = COALESCE(NULLIF(TRIM(b."author"), ''), 'Unknown')
     `);
 
     await queryRunner.query(`

@@ -5,7 +5,7 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Book } from './book.entity';
+import { Book } from '../../books/entities/book.entity';
 
 @Entity('authors')
 export class Author {

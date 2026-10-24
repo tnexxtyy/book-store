@@ -1,4 +1,6 @@
+import type { Relation } from 'typeorm';
 import {
+  Check,
   Column,
   CreateDateColumn,
   Entity,
@@ -7,9 +9,10 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-import { Author } from './author.entity';
+import { Author } from '../../authors/entities/author.entity';
 
 @Entity('books')
+@Check('CHK_books_stock', '"stock" >= 0')
 export class Book {
   @PrimaryGeneratedColumn()
   id: number;
@@ -35,5 +38,5 @@ export class Book {
     nullable: false,
   })
   @JoinColumn({ name: 'author_id' })
-  author: Author;
+  author: Relation<Author>;
 }
