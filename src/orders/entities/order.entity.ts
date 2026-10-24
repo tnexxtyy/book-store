@@ -16,25 +16,20 @@ export enum OrderStatus {
   PAID = 'paid',
   CANCELLED = 'cancelled',
 }
-
 @Entity('orders')
 export class Order {
   @PrimaryGeneratedColumn()
   id: number;
-
   @Column({
     type: 'enum',
     enum: OrderStatus,
     default: OrderStatus.NEW,
   })
   status: OrderStatus;
-
   @Column({ type: 'integer', default: 0 })
   totalPrice: number;
-
   @CreateDateColumn()
   createdAt: Date;
-
   @ManyToOne(() => User, (user) => user.orders, {
     nullable: false,
   })

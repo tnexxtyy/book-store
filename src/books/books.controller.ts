@@ -14,11 +14,9 @@ import { BooksService } from './books.service';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
 import { Book } from '../authors/entities/book.entity';
-
 @Controller('books')
 export class BooksController {
   constructor(private readonly booksService: BooksService) {}
-
   @Get()
   getBooks(
     @Query('page') page?: string,
@@ -37,24 +35,20 @@ export class BooksController {
       order,
     });
   }
-
   @Get('author/:authorId')
   getBooksByAuthor(
     @Param('authorId', ParseIntPipe) authorId: number,
   ): Promise<Book[]> {
     return this.booksService.findByAuthor(authorId);
   }
-
   @Get(':id')
   getBookById(@Param('id', ParseIntPipe) id: number): Promise<Book> {
     return this.booksService.findOne(id);
   }
-
   @Post()
   createBook(@Body() dto: CreateBookDto): Promise<Book> {
     return this.booksService.create(dto);
   }
-
   @Patch(':id')
   updateBook(
     @Param('id', ParseIntPipe) id: number,
@@ -62,7 +56,6 @@ export class BooksController {
   ): Promise<Book> {
     return this.booksService.update(id, dto);
   }
-
   @Delete(':id')
   @HttpCode(204)
   remove(@Param('id', ParseIntPipe) id: number): Promise<void> {

@@ -5,7 +5,6 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-
 import { User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -18,15 +17,21 @@ export class UsersService {
   ) {}
 
   async create(dto: CreateUserDto): Promise<User> {
+    const email = dto.email.trim().toLowerCase();
+
     const existingUser = await this.usersRepository.findOne({
-      where: { email: dto.email },
+      where: { email },
     });
 
     if (existingUser) {
       throw new ConflictException('Пользователь с таким email уже существует');
     }
 
-    const user = this.usersRepository.create(dto);
+    const user = this.usersRepository.create({
+      ...dto,
+      email,
+    });
+
     return this.usersRepository.save(user);
   }
 
@@ -52,19 +57,26 @@ export class UsersService {
   async update(id: number, dto: UpdateUserDto): Promise<User> {
     const user = await this.findOne(id);
 
-    if (dto.email && dto.email !== user.email) {
-      const existingUser = await this.usersRepository.findOne({
-        where: { email: dto.email },
-      });
+    if (dto.email !== undefined) {
+      const email = dto.email.trim().toLowerCase();
 
-      if (existingUser) {
-        throw new ConflictException(
-          'Пользователь с таким email уже существует',
-        );
+      if (email !== user.email) {
+        const existingUser = await this.usersRepository.findOne({
+          where: { email },
+        });
+
+        if (existingUser) {
+          throw new ConflictException(
+            'Пользователь с таким email уже существует',
+          );
+        }
       }
+
+      dto.email = email;
     }
 
     Object.assign(user, dto);
+
     return this.usersRepository.save(user);
   }
 

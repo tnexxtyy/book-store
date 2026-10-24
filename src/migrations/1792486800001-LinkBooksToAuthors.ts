@@ -1,6 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class LinkBooksToAuthors20261020090001 implements MigrationInterface {
+export class LinkBooksToAuthors1792486800001 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Создаём авторов на основе старых значений в books.author.
     await queryRunner.query(`

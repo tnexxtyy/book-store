@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "typeorm": "ts-node ./node_modules/typeorm/cli.js",
-    "migration:generate": "npm run typeorm -- migration:generate src/migrations/InitialSchema -d data-source.ts",
+    "migration:generate": "npm run typeorm -- migration:generate -d data-source.ts",
     "migration:run": "npm run typeorm -- migration:run -d data-source.ts",
     "build": "nest build",
     "deploy": "nest deploy",

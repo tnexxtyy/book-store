@@ -5,7 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Order, OrderStatus } from './entities/order.entity';
 import { User } from '../users/entities/user.entity';
 import { Book } from '../authors/entities/book.entity';
@@ -30,15 +30,18 @@ export class OrdersService {
       const bookRepository = manager.getRepository(Book);
       const orderRepository = manager.getRepository(Order);
 
-      const user = await userRepository.findOneBy({ id: dto.userId });
+      const user = await userRepository.findOneBy({
+        id: dto.userId,
+      });
 
       if (!user) {
         throw new NotFoundException('User not found');
       }
 
       const books: Book[] = [];
+      const sortedBookIds = [...dto.bookIds].sort((a, b) => a - b);
 
-      for (const bookId of dto.bookIds) {
+      for (const bookId of sortedBookIds) {
         const book = await bookRepository
           .createQueryBuilder('book')
           .where('book.id = :bookId', { bookId })
@@ -99,7 +102,6 @@ export class OrdersService {
       const orderRepository = manager.getRepository(Order);
       const bookRepository = manager.getRepository(Book);
 
-      // Lock only the order row, not nullable LEFT JOIN rows.
       const order = await orderRepository
         .createQueryBuilder('order')
         .where('order.id = :id', { id })
@@ -108,6 +110,21 @@ export class OrdersService {
 
       if (!order) {
         throw new NotFoundException('Order not found');
+      }
+
+      const allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
+        [OrderStatus.NEW]: [OrderStatus.PAID, OrderStatus.CANCELLED],
+        [OrderStatus.PAID]: [OrderStatus.CANCELLED],
+        [OrderStatus.CANCELLED]: [],
+      };
+
+      if (
+        dto.status !== order.status &&
+        !allowedTransitions[order.status]?.includes(dto.status)
+      ) {
+        throw new BadRequestException(
+          `Cannot change order status from ${order.status} to ${dto.status}`,
+        );
       }
 
       const books = await orderRepository
@@ -120,7 +137,9 @@ export class OrdersService {
         dto.status === OrderStatus.CANCELLED &&
         order.status !== OrderStatus.CANCELLED
       ) {
-        for (const item of books) {
+        const sortedBooks = [...books].sort((a, b) => a.id - b.id);
+
+        for (const item of sortedBooks) {
           const book = await bookRepository
             .createQueryBuilder('book')
             .where('book.id = :id', { id: item.id })
@@ -132,13 +151,6 @@ export class OrdersService {
             await bookRepository.save(book);
           }
         }
-      }
-
-      if (
-        order.status === OrderStatus.CANCELLED &&
-        dto.status !== OrderStatus.CANCELLED
-      ) {
-        throw new BadRequestException('A cancelled order cannot be reopened');
       }
 
       order.status = dto.status;
