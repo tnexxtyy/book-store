@@ -9,7 +9,7 @@ import { BooksModule } from './books/books.module';
 import { AuthorsModule } from './authors/authors.module';
 import { UsersModule } from './users/users.module';
 import { OrdersModule } from './orders/orders.module';
-
+import { WalletsModule } from './wallets/wallets.module';
 @Module({
   imports: [
     TypeOrmModule.forRoot({
@@ -26,6 +26,7 @@ import { OrdersModule } from './orders/orders.module';
     AuthorsModule,
     UsersModule,
     OrdersModule,
+    WalletsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
