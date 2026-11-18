@@ -62,14 +62,11 @@ describe('BooksService', () => {
         },
       ],
     }).compile();
-
     service = module.get<BooksService>(BooksService);
   });
-
   afterEach(() => {
     jest.clearAllMocks();
   });
-
   it('возвращает список книг', async () => {
     queryBuilder.getManyAndCount.mockResolvedValue([[], 0]);
 
@@ -81,14 +78,10 @@ describe('BooksService', () => {
       totalPages: 0,
     });
   });
-
   it('находит книгу по ID', async () => {
     const book = { id: 1, title: 'Test Book' };
-
     repository.findOne.mockResolvedValue(book);
-
     await expect(service.findOne(1)).resolves.toEqual(book);
-
     expect(repository.findOne).toHaveBeenCalledWith({
       where: { id: 1 },
       relations: { author: true },
@@ -110,7 +103,6 @@ describe('BooksService', () => {
       publishedYear: 2020,
       author,
     };
-
     authorRepository.findOneBy.mockResolvedValue(author);
     repository.create.mockReturnValue(book);
     repository.save.mockResolvedValue(book);

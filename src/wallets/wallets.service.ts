@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { randomUUID } from 'crypto';
+
 import { Wallet } from './entities/wallet.entity';
 import {
   WalletTransaction,
@@ -13,6 +15,7 @@ import {
 } from './entities/wallet-transaction.entity';
 import { User } from '../users/entities/user.entity';
 import { TransferDto } from './dto/transfer.dto';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class WalletsService {
@@ -20,6 +23,7 @@ export class WalletsService {
     @InjectRepository(Wallet)
     private readonly walletsRepository: Repository<Wallet>,
     private readonly dataSource: DataSource,
+    private readonly redisService: RedisService,
   ) {}
 
   async createWallet(userId: number): Promise<Wallet> {
@@ -148,108 +152,139 @@ export class WalletsService {
       throw new BadRequestException('Cannot transfer to yourself');
     }
 
-    return this.dataSource.transaction(async (manager) => {
-      const wallets = manager.getRepository(Wallet);
-      const transactions = manager.getRepository(WalletTransaction);
+    const orderedUserIds = [fromUserId, dto.toUserId].sort((a, b) => a - b);
 
-      // Lock both wallets in ascending user ID order to reduce deadlocks.
-      const orderedUserIds = [fromUserId, dto.toUserId].sort((a, b) => a - b);
-      const lockedWallets: Wallet[] = [];
+    const acquiredLocks: { key: string; token: string }[] = [];
 
+    try {
+      // Получаем Redis-блокировки в одинаковом порядке.
       for (const userId of orderedUserIds) {
-        const wallet = await wallets
-          .createQueryBuilder('wallet')
-          .innerJoinAndSelect('wallet.user', 'user')
-          .where('user.id = :userId', { userId })
-          .setLock('pessimistic_write')
-          .getOne();
+        const key = `lock:wallet:user:${userId}`;
+        const token = randomUUID();
 
-        if (!wallet) {
-          throw new NotFoundException(`Wallet for user ${userId} not found`);
-        }
+        const acquired = await this.redisService.acquireLock(key, token, 60);
 
-        lockedWallets.push(wallet);
-      }
-
-      const sender = lockedWallets.find(
-        (wallet) => wallet.user.id === fromUserId,
-      )!;
-
-      const recipient = lockedWallets.find(
-        (wallet) => wallet.user.id === dto.toUserId,
-      )!;
-
-      // Check idempotency only after locking the sender wallet.
-      const previous = await transactions.findOne({
-        where: {
-          wallet: { id: sender.id },
-          idempotencyKey,
-        },
-      });
-
-      if (previous) {
-        if (
-          previous.type !== WalletTransactionType.TRANSFER_OUT ||
-          previous.amount !== dto.amount ||
-          previous.relatedWalletId !== recipient.id
-        ) {
+        if (!acquired) {
           throw new ConflictException(
-            'Idempotency key was already used for another request',
+            `Wallet for user ${userId} is busy. Try again.`,
           );
         }
 
-        const recipientEntry = await transactions.findOne({
+        acquiredLocks.push({ key, token });
+      }
+
+      // Выполняем перевод внутри транзакции PostgreSQL.
+      return await this.dataSource.transaction(async (manager) => {
+        const wallets = manager.getRepository(Wallet);
+        const transactions = manager.getRepository(WalletTransaction);
+
+        const lockedWallets: Wallet[] = [];
+
+        // Дополнительно блокируем строки кошельков в PostgreSQL.
+        for (const userId of orderedUserIds) {
+          const wallet = await wallets
+            .createQueryBuilder('wallet')
+            .innerJoinAndSelect('wallet.user', 'user')
+            .where('user.id = :userId', { userId })
+            .setLock('pessimistic_write')
+            .getOne();
+
+          if (!wallet) {
+            throw new NotFoundException(`Wallet for user ${userId} not found`);
+          }
+
+          lockedWallets.push(wallet);
+        }
+
+        const sender = lockedWallets.find(
+          (wallet) => wallet.user.id === fromUserId,
+        )!;
+
+        const recipient = lockedWallets.find(
+          (wallet) => wallet.user.id === dto.toUserId,
+        )!;
+
+        // Проверяем, не выполнялся ли этот перевод раньше.
+        const previous = await transactions.findOne({
           where: {
-            wallet: { id: recipient.id },
+            wallet: { id: sender.id },
             idempotencyKey,
-            type: WalletTransactionType.TRANSFER_IN,
-            relatedWalletId: sender.id,
           },
         });
 
-        if (!recipientEntry || recipientEntry.amount !== dto.amount) {
-          throw new ConflictException('Previous transfer is incomplete');
+        if (previous) {
+          if (
+            previous.type !== WalletTransactionType.TRANSFER_OUT ||
+            previous.amount !== dto.amount ||
+            previous.relatedWalletId !== recipient.id
+          ) {
+            throw new ConflictException(
+              'Idempotency key was already used for another request',
+            );
+          }
+
+          const recipientEntry = await transactions.findOne({
+            where: {
+              wallet: { id: recipient.id },
+              idempotencyKey,
+              type: WalletTransactionType.TRANSFER_IN,
+              relatedWalletId: sender.id,
+            },
+          });
+
+          if (!recipientEntry || recipientEntry.amount !== dto.amount) {
+            throw new ConflictException('Previous transfer is incomplete');
+          }
+
+          return {
+            fromBalance: sender.balance,
+            toBalance: recipient.balance,
+          };
         }
+
+        if (sender.balance < dto.amount) {
+          throw new ConflictException('Insufficient funds');
+        }
+
+        // Изменяем балансы.
+        sender.balance -= dto.amount;
+        recipient.balance += dto.amount;
+
+        await wallets.save([sender, recipient]);
+
+        // Записываем обе операции в журнал.
+        await transactions.save([
+          transactions.create({
+            wallet: sender,
+            type: WalletTransactionType.TRANSFER_OUT,
+            amount: dto.amount,
+            balanceAfter: sender.balance,
+            idempotencyKey,
+            relatedWalletId: recipient.id,
+          }),
+          transactions.create({
+            wallet: recipient,
+            type: WalletTransactionType.TRANSFER_IN,
+            amount: dto.amount,
+            balanceAfter: recipient.balance,
+            idempotencyKey,
+            relatedWalletId: sender.id,
+          }),
+        ]);
 
         return {
           fromBalance: sender.balance,
           toBalance: recipient.balance,
         };
-      }
-
-      if (sender.balance < dto.amount) {
-        throw new ConflictException('Insufficient funds');
-      }
-
-      sender.balance -= dto.amount;
-      recipient.balance += dto.amount;
-
-      await wallets.save([sender, recipient]);
-
-      await transactions.save([
-        transactions.create({
-          wallet: sender,
-          type: WalletTransactionType.TRANSFER_OUT,
-          amount: dto.amount,
-          balanceAfter: sender.balance,
-          idempotencyKey,
-          relatedWalletId: recipient.id,
-        }),
-        transactions.create({
-          wallet: recipient,
-          type: WalletTransactionType.TRANSFER_IN,
-          amount: dto.amount,
-          balanceAfter: recipient.balance,
-          idempotencyKey,
-          relatedWalletId: sender.id,
-        }),
-      ]);
-
-      return {
-        fromBalance: sender.balance,
-        toBalance: recipient.balance,
-      };
-    });
+      });
+    } finally {
+      // Освобождаем только те блокировки, которые получили.
+      await Promise.allSettled(
+        acquiredLocks.map(({ key, token }) =>
+          this.redisService.releaseLock(key, token),
+        ),
+      );
+    }
   }
 
   private validateRequest(amount: number, idempotencyKey: string): void {

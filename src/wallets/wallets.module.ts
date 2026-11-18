@@ -4,8 +4,9 @@ import { Wallet } from './entities/wallet.entity';
 import { WalletTransaction } from './entities/wallet-transaction.entity';
 import { WalletsController } from './wallets.controller';
 import { WalletsService } from './wallets.service';
+import{RedisModule} from '../redis/redis.module';
 @Module({
-  imports: [TypeOrmModule.forFeature([Wallet, WalletTransaction])],
+  imports: [TypeOrmModule.forFeature([Wallet, WalletTransaction]), RedisModule],
   controllers: [WalletsController],
   providers: [WalletsService],
   exports: [WalletsService],

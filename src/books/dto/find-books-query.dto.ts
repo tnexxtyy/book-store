@@ -8,7 +8,6 @@ import {
   Min,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
-
 export const BOOK_SORT_FIELDS = [
   'id',
   'title',
@@ -37,4 +36,10 @@ export class FindBooksQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsIn(['ASC', 'DESC'])
   order?: 'ASC' | 'DESC';
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  cursor?:number;
 }
